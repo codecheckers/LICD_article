@@ -1,0 +1,154 @@
+---
+output:
+  pdf_document:
+    toc: false
+    includes:
+       in_header: codecheck-preamble.sty
+    latex_engine: xelatex
+---
+
+```{r rsetup,eval=TRUE,include=FALSE}
+require(codecheck)
+require(knitr)
+require(rprojroot)
+require(yaml)
+require(xtable)
+require(tibble)
+require(readr)
+options(width=60)
+opts_chunk$set(cache=FALSE)
+
+root = find_root("codecheck.yml")
+```
+
+```{r codecheck_logo, echo=FALSE,results='asis'}
+latex_codecheck_logo()
+```
+
+```{r manifest, eval=TRUE, include=FALSE}
+metadata = codecheck_metadata(root)
+manifest = metadata$manifest
+
+dest_dir = file.path(root, "codecheck", "outputs")
+## Create the outputs directory if missing
+if ( !dir.exists(dest_dir) ) {
+  dir.create(dest_dir)
+}
+
+manifest_df = copy_manifest_files(root, metadata,
+                                  dest_dir, keep_full_path = FALSE,
+                                  overwrite = FALSE)
+```
+
+---
+title: `r paste("CODECHECK certificate", metadata$certificate)`
+subtitle: `r codecheck:::as_latex_url(metadata$report)`
+---
+
+```{r summary_metadata, echo=FALSE, results='asis'}
+latex_summary_of_metadata(metadata)
+```
+
+```{r summary_manifest, echo=FALSE, results='asis'}
+latex_summary_of_manifest(metadata, manifest_df, root)
+```
+
+# Summary
+
+This workflow was very straightforward to check following the authors' README. All figures stored in the repository could be recreated and match the ones given in the manuscript.
+
+# CODECHECKER notes
+
+```{r git_sha, echo=FALSE}
+gitInfo <- ""
+if(git2r::in_repository(root)) {
+  gitInfo <- paste0("This evaluation is based on the commit `", git2r::last_commit()$sha, "`")
+}
+```
+
+I forked the [GitHub repo provided by the authors](https://github.com/rsbivand/LICD_article) into the codecheckers organisation: [codecheckers/LICD_article](https://github.com/codecheckers/LICD_article). `r gitInfo`.
+The authors deposited the contents of the repository on Zenodo at [https://doi.org/10.5281/zenodo.4283766](https://doi.org/10.5281/zenodo.4283766).
+
+The repository contains some R code and a number of `.jpeg` files.
+Data is downloaded as part of the scripts.
+
+I went through the steps in the README, and only had to install a few packages that were not available on my system yet.
+Using the provided `DESCRIPTION` file, I installed dependencies with `devtools::install_deps()`.
+<!--Remotes: r-spatial/mapview@7d097bc2928fe5d5be676d30956c62e98952260f-->
+Thanks to the solid documentation within the scripts and the readable code, I also knew to use the development version of the package `mapview`.
+
+This took around 25 minutes to complete on my laptop (8 cores, 40 GB RAM, SSD).
+From the diff between the captures outputs, it's quite easy to see the differences in the computing environments, but that no relevant problems occurred during execution.
+I briefly confirmed the workflow also runs in an `rocker/geospatial:4.0.3` container.
+
+## Recommendations to authors
+
+The code was well documented and worked flawlessly on my local machine, there are a few things the authors could consider for their next workflow publication, some of which the authors already picked up in a revision of their repository.
+
+- (authors added `DESCRIPTION` file) use `renv` package or a `DESCRIPTION` file to define the dependencies (= use R package structure)
+- (authors updated README) document in README that development version of package `mapview` is needed
+- (authors updated README) the interactive map is a bonus compared to the paper - mention how to get to it in the README (the `.zip` file)
+- (authors created Zenodo record) deposit a copy of your repo on Zenodo to make the workflow citable and archived
+- The data could possibly be republished with the workflow just to be sure, since it is available under open licenses; I can't judge the long term availability of the used download URLs
+
+\clearpage
+
+# Manifest files
+
+```{r, echo=FALSE, results="asis", width=100}
+for(i in c(1:nrow(manifest_df))) {
+  path <- manifest_df[i,"dest"]
+  if(stringr::str_ends(path, "(png|pdf|jpg|jpeg)")) {
+    # include graphics with knitr has to happen at top level in chunks, see https://github.com/yihui/knitr/issues/1260
+    # see also https://stackoverflow.com/questions/51268623/insert-images-using-knitrinclude-graphics-in-a-for-loop
+    # knitr::include_graphics(manifest_df[1, "dest"], error = TRUE)
+    # Therefore, generate Markdown code here:
+    cat("## ", basename(path), "\n\n")
+    cat("**Comment:** ", manifest_df[i,"comment"], "\n\n")
+    cat(paste0("![", "Test ", "](", path, ")\n"))
+  } else if (stringr::str_ends(path, "(Rout|txt)")) {
+    cat("## ", basename(path), "\n\n")
+    cat("\\scriptsize \n\n", "```txt\n")
+    cat(readLines(path), sep = "\n")
+    cat("\n\n``` \n\n", "\\normalsize \n\n")
+  } else if (stringr::str_ends(path, "csv")) {
+    cat("## ", basename(path), "\n\n", "Summary statistics of tabular data:", "\n\n")
+    cat("\\scriptsize \n\n", "```txt\n")
+    print(skimr::skim(read.csv(path)))
+    cat("\n\n``` \n\n", "\\normalsize \n\n")
+  } else {
+    cat("## ", basename(path), "\n\n")
+    cat("Cannot inlcude output file as figure.")
+  }
+  
+  cat("\\clearpage \n\n")
+}
+```
+
+\clearpage
+
+# Citing this document
+
+```{r, results='asis',echo=FALSE}
+cite_certificate(metadata)
+```
+
+# About CODECHECK
+
+This certificate confirms that the codechecker could independently reproduce the results of a computational analysis given the data and code from a third party.
+A CODECHECK does not check whether the original computation analysis is correct.
+However, as all materials required for the reproduction are freely available by following the links in this document, the reader can then study for themselves the code and data.
+
+# About this document
+
+This document was created using [R Markdown](https://rmarkdown.rstudio.com/) using the [`codecheck`](https://github.com/codecheckers/codecheck) R package.
+`make codecheck.pdf` will regenerate the report file.
+
+```{r}
+sessionInfo()
+```
+
+```{r, include=FALSE, eval=FALSE}
+# render this document in RStudio
+rmarkdown::render("codecheck.Rmd", output_format = "pdf_document") 
+```

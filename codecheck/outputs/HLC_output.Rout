@@ -1,0 +1,293 @@
+
+> sink(zz, type = "message")
+
+> # Loading libraries
+> library(sf)
+
+> library(spdep)
+
+> library(tmap)
+
+> library(units)
+
+> library(Matrix)
+
+> # Importing Devon HLC shapefile
+> zipfile <- "https://archaeologydataservice.ac.uk/catalogue/adsdata/arch-2090-1/dissemination/zip/rawhlc.zip"
+
+> ## subject to https://archaeologydataservice.ac.uk/advice/termsOfUseAndAccess.xhtml
+> ## It can be cited by https://doi.org/10.5284/1032952
+> 
+> td  .... [TRUNCATED] 
+
+> download.file(zipfile, destfile=file.path(td, "rawhlc.zip"))
+trying URL 'https://archaeologydataservice.ac.uk/catalogue/adsdata/arch-2090-1/dissemination/zip/rawhlc.zip'
+Content type 'application/zip' length 23188797 bytes (22.1 MB)
+==================================================
+downloaded 22.1 MB
+
+
+> fls <- unzip(file.path(td, "rawhlc.zip"), exdir=td, overwrite=TRUE)
+
+> devon_hlc <- st_read(file.path(td, "rawhlc.shp"), crs=27700)
+Reading layer `rawhlc' from data source `/tmp/RtmpDaLJtN/rawhlc.shp' using driver `ESRI Shapefile'
+Simple feature collection with 49485 features and 36 fields
+geometry type:  MULTIPOLYGON
+dimension:      XY
+bbox:           xmin: 220832 ymin: 34922.78 xmax: 337602.9 ymax: 148712.1
+projected CRS:  OSGB 1936 / British National Grid
+
+> ## clip to Torridge District boundary
+> 
+> torridge_bys <- "https://raw.githubusercontent.com/digital-land/boundary-collection/master/collection/loc ..." ... [TRUNCATED] 
+
+> ## subject to https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/
+> bdy <- st_read(torridge_bys)
+Reading layer `index' from data source `https://raw.githubusercontent.com/digital-land/boundary-collection/master/collection/local-authority/E07000046/index.geojson' using driver `GeoJSON'
+Simple feature collection with 1 feature and 10 fields
+geometry type:  MULTIPOLYGON
+dimension:      XY
+bbox:           xmin: -4.680689 ymin: 50.64654 xmax: -3.883846 ymax: 51.20254
+geographic CRS: WGS 84
+
+> ## initially created with sf linked to GEOS 3.9.0dev, with OverlayNG 
+> ## without OverlayNG, intersection fails because of topology errors
+> ## req .... [TRUNCATED] 
+
+> ## Create ordered factor
+> 
+> 
+> hlc$class <- ifelse(hlc$PERIOD1 %in% c("Modern", "Post-medieval"), hlc$PERIOD1, "Medieval")
+
+> hlc$class <- ordered(hlc$class, levels=c("Modern", "Post-medieval", "Medieval"))
+
+> ## Map classes
+> 
+> HLC_map <- tm_shape(hlc) + 
++   tm_fill("class", palette="viridis", title="Character\nTypes") + 
++   tm_compass(position=c("left ..." ... [TRUNCATED] 
+
+> # tiff("Torridge_HLC.tiff", width=15, height=15, units="cm", res=300)
+> # HLC_map
+> # dev.off()
+> jpeg("Torridge_HLC.jpeg", width=15, height=15, uni .... [TRUNCATED] 
+
+> HLC_map
+
+> dev.off()
+null device 
+          1 
+
+> ## Create neighbours
+> nb1 <- poly2nb(hlc, snap=4, row.names=as.character(hlc$ID))
+
+> hlc.nb <- nblag(nb1, 3) ## higher orders
+
+> hlc.mat <- as(nb2listw(nblag_cumul(hlc.nb), style="B"), "CsparseMatrix")
+
+> ## Join-Count Statistics
+> 
+> jc.hlc <- vector(mode="list", length=length(hlc.nb))
+
+> jc.hlc.p <- vector(mode="list", length=length(hlc.nb))
+
+> for (i in 1:length(hlc.nb)) {
++   jc.hlc[[i]] <- joincount.multi(hlc$class, nb2listw(hlc.nb[[i]]))
++   jc.hlc.p[[i]] <- pnorm(jc.hlc[[i]][,4], lower .... [TRUNCATED] 
+
+> ## Exporting output
+> 
+> jcs <- do.call("rbind", jc.hlc)[-c(7, 14, 21),]
+
+> jcps <- do.call("c", jc.hlc.p)[-c(7, 14, 21)]
+
+> (jc_out <- data.frame(order=rep(c("First", "Second", "Third"), each=6), JCS=rownames(jcs), as.data.frame(cbind(jcs, pvalue=jcps)), row.names=NULL))
+    order                         JCS  Joincount   Expected   Variance     z.value       pvalue
+1   First               Modern:Modern  771.12427  839.00207 102.175599 -6.71512609 1.000000e+00
+2   First Post-medieval:Post-medieval  345.60261  391.89976  59.981162 -5.97787566 1.000000e+00
+3   First           Medieval:Medieval   54.80680   53.16675   9.973976  0.51930739 3.017732e-01
+4   First        Post-medieval:Modern 1091.05970 1147.26492 139.398052 -4.76045268 9.999990e-01
+5   First             Medieval:Modern  514.64644  422.73095  65.680018 11.34154148 4.084633e-30
+6   First      Medieval:Post-medieval  365.76018  288.93556  48.634518 11.01610665 1.597925e-28
+7  Second               Modern:Modern  839.46923  839.00207  30.997060  0.08390832 4.665647e-01
+8  Second Post-medieval:Post-medieval  418.01951  391.89976  18.034020  6.15067428 3.857711e-10
+9  Second           Medieval:Medieval   71.31331   53.16675   2.955733 10.55508654 2.405980e-26
+10 Second        Post-medieval:Modern 1091.47783 1147.26492  41.291714 -8.68164898 1.000000e+00
+11 Second             Medieval:Modern  425.29930  422.73095  19.659496  0.57925259 2.812094e-01
+12 Second      Medieval:Post-medieval  297.42082  288.93556  14.480309  2.22985407 1.287857e-02
+13  Third               Modern:Modern  824.51919  839.00207  18.046848 -3.40921464 9.996742e-01
+14  Third Post-medieval:Post-medieval  394.30714  391.89976  10.147943  0.75571103 2.249112e-01
+15  Third           Medieval:Medieval   60.36025   53.16675   1.569199  5.74250544 4.664294e-09
+16  Third        Post-medieval:Modern 1137.75125 1147.26492  21.881608 -2.03379977 9.790141e-01
+17  Third             Medieval:Modern  435.02278  422.73095  10.870555  3.72812692 9.645411e-05
+18  Third      Medieval:Post-medieval  291.03939  288.93556   7.837674  0.75148029 2.261818e-01
+
+> write.csv(jc_out, "jc_out.csv", row.names=FALSE)
+
+> ###########################################
+> ## Boots' LICD (from Bivand et al. 2017) ##
+> ###########################################
+> 
+> # For h .... [TRUNCATED] 
+                   [,1]
+Modern        0.5167038
+Post-medieval 0.3531658
+Medieval      0.1301304
+
+> areas <- aggregate(st_area(hlc), list(hlc$class), sum)
+
+> areas$x <- set_units(areas$x, "km2")
+
+> areas$props <- drop_units(areas$x/sum(areas$x))
+
+> areas
+        Group.1               x     props
+1        Modern 451.1156 [km^2] 0.4593523
+2 Post-medieval 271.3623 [km^2] 0.2763170
+3      Medieval 259.5909 [km^2] 0.2643307
+
+> adata <- as.numeric(hlc$class) #factor no longer necessary, now numeric
+
+> source("local_JC0.R")
+
+> res <- local_JC0(obj=hlc, lagsmat=hlc.mat, varname="class", numvar=adata, p=p)
+
+> local_comp <- res[[1]]
+
+> JC.pvalue_seq <- res[[2]]
+
+> #### STEP 2: local configuration
+> 
+> local_config <- matrix(0,length(adata),1)
+
+> colnames(local_config) <- c("cluster-dispersion")
+
+> for (j in 1:length(adata)){#for cluster is 1, for dispersion -1, otherwise 0
++   if (min(JC.pvalue_seq[j,])<1-(1-0.05)^(1/3)){ ###CHANGE
++     ifels .... [TRUNCATED] 
+
+> # Combination of local composition and local configuration
+> Type <- character(length=length(adata))
+
+> C <- cbind(local_comp, local_config)
+
+> for (i in 1:length(adata)){
++   ifelse(C[i,1] == 1 && C[i,2] == 1, Type[i] <- "Cluster",
++          ifelse(C[i,1] == 1 && C[i,2] == 0, Type[i] <- "C ..." ... [TRUNCATED] 
+
+> # Plot LICD - TIFF + JPEG
+> Type1 <-  Type
+
+> hlc$Type <- Type
+
+> is.na(Type1) <- Type1 == "No cluster"
+
+> hlc$Type1 <- factor(Type1)
+
+> LICD_map <- tm_shape(hlc) + 
++   tm_fill("Type1", palette="viridis", title="LICD", textNA="No cluster") + 
++   tm_compass(position=c("left", "bottom ..." ... [TRUNCATED] 
+
+> # tiff("Torridge_LICD.tiff", width=15, height=15, units="cm", res=300)
+> # LICD_map
+> # dev.off()
+> jpeg("Torridge_LICD.jpeg", width=15, height=15,  .... [TRUNCATED] 
+
+> LICD_map
+
+> dev.off()
+null device 
+          1 
+
+> # HLC & LICD
+> 
+> both <- LICD_map + tm_facets("class", nrow=2)
+
+> jpeg("Torridge_HLC_LICD.jpeg",width=30,height=25,units="cm",res=300)
+
+> both
+
+> dev.off()
+null device 
+          1 
+
+> # mapview installed from "r-spatial/mapview" after #336 #327 #323
+> library(mapview)
+
+> packageVersion("mapview")
+[1] ‘2.9.4’
+
+> if (unname(sf_extSoftVersion()["GDAL"]) >= "3.1.0") mapviewOptions(fgb = FALSE)
+
+> file.remove("HLC_map.html")
+[1] FALSE
+
+> file.remove("HLC_map.zip")
+[1] TRUE
+
+> cl <- mapview(hlc, zcol="class")
+
+> ty <- mapview(hlc, zcol="Type")
+
+> mapshot(cl + ty, url = paste0(getwd(), "/HLC_map.html"))
+
+> zip("HLC_map.zip", "HLC_map.html")
+
+> file.remove("HLC_map.html")
+[1] TRUE
+
+> sessionInfo()
+R version 4.0.3 (2020-10-10)
+Platform: x86_64-pc-linux-gnu (64-bit)
+Running under: Ubuntu 20.04 LTS
+
+Matrix products: default
+BLAS:   /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3
+LAPACK: /usr/lib/x86_64-linux-gnu/openblas-pthread/liblapack.so.3
+
+locale:
+ [1] LC_CTYPE=en_US.UTF-8       LC_NUMERIC=C               LC_TIME=de_DE.UTF-8        LC_COLLATE=en_US.UTF-8    
+ [5] LC_MONETARY=de_DE.UTF-8    LC_MESSAGES=en_US.UTF-8    LC_PAPER=de_DE.UTF-8       LC_NAME=C                 
+ [9] LC_ADDRESS=C               LC_TELEPHONE=C             LC_MEASUREMENT=de_DE.UTF-8 LC_IDENTIFICATION=C       
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base     
+
+other attached packages:
+ [1] stars_0.4-3         abind_1.4-5         spatstat_1.64-1     rpart_4.1-15        nlme_3.1-150        spatstat.data_1.5-2
+ [7] archdata_1.2        mapview_2.9.4       Matrix_1.2-18       units_0.6-7         tmap_3.2            spdep_1.1-5        
+[13] spData_0.3.8        sp_1.4-4            sf_0.9-6           
+
+loaded via a namespace (and not attached):
+  [1] colorspace_2.0-0        leafem_0.1.3            deldir_0.2-3            ellipsis_0.3.1          class_7.3-17           
+  [6] leaflet_2.0.3           rprojroot_2.0.2         dadjoke_0.1.2           cranlike_1.0.2          satellite_1.0.2        
+ [11] base64enc_0.1-3         fs_1.5.0                dichromat_2.0-0         rstudioapi_0.13         farver_2.0.3           
+ [16] remotes_2.2.0           bit64_4.0.5             fansi_0.4.1             codetools_0.2-18        splines_4.0.3          
+ [21] knitr_1.30              polyclip_1.10-0         pkgload_1.1.0           jsonlite_1.7.1          tmaptools_3.1          
+ [26] png_0.1-7               compiler_4.0.3          httr_1.4.2              assertthat_0.2.1        cli_2.2.0              
+ [31] leaflet.providers_1.9.0 htmltools_0.5.0         prettyunits_1.1.1       tools_4.0.3             coda_0.19-4            
+ [36] glue_1.4.2              dplyr_1.0.2             rappdirs_0.3.1          gmodels_2.18.1          Rcpp_1.0.5             
+ [41] raster_3.4-5            vctrs_0.3.5             svglite_1.2.3.2         gdata_2.18.0            debugme_1.1.0          
+ [46] leafsync_0.1.0          crosstalk_1.1.0.1       lwgeom_0.2-5            xfun_0.19               stringr_1.4.0          
+ [51] ps_1.4.0                testthat_3.0.0          parsedate_1.2.0         lifecycle_0.2.0         gtools_3.8.2           
+ [56] devtools_2.3.2          goftest_1.2-2           XML_3.99-0.5            LearnBayes_2.15.1       MASS_7.3-53            
+ [61] scales_1.1.1            spatstat.utils_1.17-0   clisymbols_1.2.0        parallel_4.0.3          expm_0.999-5           
+ [66] rematch2_2.1.2          RColorBrewer_1.1-2      yaml_2.2.1              curl_4.3                memoise_1.1.0          
+ [71] gdtools_0.2.2           stringi_1.5.3           RSQLite_2.2.1           desc_1.2.0              leafpop_0.0.6          
+ [76] e1071_1.7-4             crancache_0.0.0.9001    boot_1.3-25             pkgbuild_1.1.0          repr_1.1.0             
+ [81] systemfonts_0.3.2       rlang_0.4.8             pkgconfig_2.0.3         prompt_1.0.0            evaluate_0.14          
+ [86] lattice_0.20-41         tensor_1.5              purrr_0.3.4             htmlwidgets_1.5.2       bit_4.0.4              
+ [91] processx_3.4.4          tidyselect_1.1.0        magrittr_2.0.1          R6_2.5.0                generics_0.1.0         
+ [96] DBI_1.1.0               mgcv_1.8-33             pillar_1.4.7            withr_2.3.0             tibble_3.0.4           
+[101] crayon_1.3.4            uuid_0.1-4              KernSmooth_2.23-18      rmarkdown_2.5           usethis_1.6.3          
+[106] grid_4.0.3              blob_1.2.1              callr_3.5.1             git2r_0.27.1            webshot_0.5.2          
+[111] digest_0.6.27           classInt_0.4-3          brew_1.0-6              stats4_4.0.3            munsell_0.5.0          
+[116] viridisLite_0.3.0       skimr_2.1.2             sessioninfo_1.1.1      
+
+> sf_extSoftVersion()
+          GEOS           GDAL         proj.4 GDAL_with_GEOS     USE_PROJ_H 
+       "3.8.1"        "3.1.3"        "7.1.1"         "true"         "true" 
+
+> sink(type = "message")
+
+> sink()
